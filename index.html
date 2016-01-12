@@ -1,0 +1,154 @@
+﻿<!DOCTYPE html>
+
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="initial-scale=1" />
+  <title>WebRTC マルチストリーム サンプル</title>
+
+  <link rel="stylesheet" href="/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="/css/main.css" />
+  <script src="/js/webrtc_polyfill.js"></script>
+  <script src="/js/jquery-2.1.4.min.js"></script>
+  <script src="/js/bootstrap.min.js"></script>
+  <script src="socket.io/socket.io.js"></script>
+  <script src="/js/uuid.core.js"></script>
+</head>
+<body>
+
+  <!-- ヘッダー -->
+  <header class="navbar-static-top bs-docs-nav">
+    <div class="navbar-inner">
+      <div class="container">
+        <div class="navbar-header">
+          <span class="navbar-brand">WebRTC マルチストリーム サンプルアプリ</span>
+        </div>
+        <ul class="nav navbar-nav navbar-right">
+          <li id="reloadLeaveMessage" style="display:none">退室はページリロードで代替えします。</li>
+          <li class="dropdown" id="ddJoinRoom">
+            <a href="#" class="dropdown-toggle" data-toggle="dropdown" id="btnJoinRoom">部屋に参加<b class="caret"></b></a>
+            <ul class="dropdown-menu" id="ddmJoinRoom" style="padding: 15px;min-width: 350px;">
+              <li>
+                <div class="row">
+                  <div class="col-md-12">
+                    <form class="form" role="form" id="formJoinRoom">
+                      <div class="form-group">
+                        <label for="txtRoomName" class="control-label">参加する部屋名 (GUID形式のみ)</label>
+                        <input type="text" pattern="^[A-Fa-f0-9]{8}(?:-[A-Fa-f0-9]{4}){3}-[A-Fa-f0-9]{12}$" class="form-control" id="txtRoomName" required>
+                        <button type="button" class="btn btn-default btn-sm" id="btnGenerateRoomName">部屋名生成</button>
+                      </div>
+                      <div class="form-group">
+                        <button type="submit" class="btn btn-success btn-block">参加</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </header>
+
+  <!-- UIマスク -->
+  <div id="maskPanel"></div>
+
+  <!-- メインUI -->
+  <div class="container" id="container">
+    <div id="localContainer" class="userContainer">
+      <span class="userName">ローカルピア(自分)のストリーム</span>
+      <div class="userStreamContainer">
+        <div class="streamItemContainer">
+          <span class="btnRemoveStream glyphicon glyphicon-remove" style="display:none" id="btnRemoveStream1" data-no="1" title="このストリームを削除します"></span><br />
+          <button class="btnAddStream" id="btnAddStream1" data-no="1">
+            <span class="glyphicon glyphicon-remove r45"></span><br />
+            <span>ストリームを追加</span>
+          </button>
+          <video id="localView1"></video>
+        </div>
+        <div class="streamItemContainer">
+          <span class="btnRemoveStream glyphicon glyphicon-remove" style="display:none" id="btnRemoveStream2" data-no="2" title="このストリームを削除します"></span><br />
+          <button class="btnAddStream" id="btnAddStream2" data-no="2">
+            <span class="glyphicon glyphicon-remove r45"></span><br />
+            <span>ストリームを追加</span>
+          </button>
+          <video id="localView2"></video>
+        </div>
+        <div class="streamItemContainer">
+          <span class="btnRemoveStream glyphicon glyphicon-remove" style="display:none" id="btnRemoveStream3" data-no="3" title="このストリームを削除します"></span><br />
+          <button class="btnAddStream" id="btnAddStream3" data-no="3">
+            <span class="glyphicon glyphicon-remove r45"></span><br />
+            <span>ストリームを追加</span>
+          </button>
+          <video id="localView3"></video>
+        </div>
+      </div>
+    </div>
+    <div id="remoteContainer" class="userContainer">
+      <span class="userName">リモートピア(相手)のストリーム</span>
+      <div class="userStreamContainer">
+        <div class="streamItemContainer">
+          <video id="remoteView1"></video>
+        </div>
+        <div class="streamItemContainer">
+          <video id="remoteView2"></video>
+        </div>
+        <div class="streamItemContainer">
+          <video id="remoteView3"></video>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 追加ストリームを選択するダイアログ -->
+  <div class="modal fade" id="selectDeviceDialog" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+          <h4 class="modal-title" id="myModalLabel">キャプチャーデバイスを選択してください (ビデオのみ)</h4>
+        </div>
+        <div class="modal-body">
+          <div class="form-group" id="othorSelectDevice">
+            <label for="ddDevices" class="control-label">デバイス</label>
+            <select class="input-large form-control" id="deviceList"></select>
+          </div>
+          <div class="form-group" id="firefoxSelectDevice">
+            <span id="ffMessage" class="control-label">"デバイスを選択"ボタンをクリックし、左上にでるポップアップでデバイスを選択してください。<br /><button id="btnFfSelectDevice">デバイスを選択</button></span>
+          </div>
+          <div class="form-group">
+            <label for="streamPreview control-label">プレビュー</label>
+            <div class="form-control" id="devicePreview">
+              <video id="streamPreview"></video>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btnDialogAddStream" class="btn btn-primary">このストリームを追加</button>
+          <button type="button" class="btn btn-default" data-dismiss="modal">閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メッセージダイアログ -->
+  <div class="modal fade" id="messageDialog" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" data-backdrop="static">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          部屋名：<input type="text" id="dialogRoomName" size="36" readonly />
+        </div>
+        <div class="modal-body">
+          <p id="messageText"></p>
+          <span id="waitingIcon" class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
+        </div>
+        <div class="modal-footer" id="messageDialogFooter">
+          <button type="button" class="btn btn-default" data-dismiss="modal">閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/main.js"></script>
+</body>
+</html>
